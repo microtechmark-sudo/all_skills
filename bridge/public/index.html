@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone ⇄ PC Bridge</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #17191c; --muted: #6a7078; --line: #e2e5ea;
+    --accent: #2563eb; --accent-text: #ffffff; --phone: #0f9d6b; --pc: #7c4dff; --danger: #d33a3a;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #101215; --card: #1a1d22; --text: #eceef1; --muted: #98a0aa; --line: #2b3038;
+            --accent: #5b8def; --phone: #35c48f; --pc: #a28bff; --danger: #ff6b6b; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         padding: env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom)); }
+  main { max-width: 760px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; padding: 18px 0 12px; }
+  h1 { font-size: 1.25rem; white-space: nowrap; margin: 0; letter-spacing: -.01em; }
+  .status { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--muted); white-space: nowrap; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
+  .dot.on { background: var(--phone); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--text);
+           border-radius: 10px; padding: 9px 14px; min-height: 40px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  /* connect card */
+  .connect { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; }
+  .qr { width: 148px; height: 148px; border-radius: 10px; overflow: hidden; background: #fff; border: 1px solid var(--line); }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .connect h2 { margin: 0 0 4px; font-size: 1rem; }
+  .connect p { margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
+  .linkrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .link { font: .9rem ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--bg); border: 1px solid var(--line);
+          padding: 6px 10px; border-radius: 8px; word-break: break-all; user-select: all; }
+  .nets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .nets button { padding: 4px 10px; min-height: 32px; font-size: .8rem; }
+  .nets button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  .hide { display: none !important; }
+  /* compose */
+  textarea { width: 100%; min-height: 96px; resize: vertical; padding: 12px; font: inherit; color: var(--text); background: var(--bg);
+             border: 1px solid var(--line); border-radius: 10px; }
+  .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .actions .spacer { flex: 1; }
+  .drop { margin-top: 10px; border: 2px dashed var(--line); border-radius: 12px; padding: 18px; text-align: center; color: var(--muted); font-size: .92rem; }
+  .drop.over { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  /* uploads */
+  .up { margin-top: 10px; font-size: .88rem; }
+  .up .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 4px; }
+  .up .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  /* feed */
+  .feedhead { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 8px; }
+  .feedhead h2 { margin: 0; font-size: 1rem; }
+  .empty { color: var(--muted); text-align: center; padding: 28px 8px; }
+  .item { display: grid; gap: 8px; }
+  .meta { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); }
+  .badge { font-weight: 600; font-size: .75rem; padding: 2px 8px; border-radius: 999px; color: #fff; background: var(--muted); }
+  .badge.phone { background: var(--phone); } .badge.pc { background: var(--pc); }
+  .meta .spacer { flex: 1; }
+  .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .file { display: flex; align-items: center; gap: 12px; }
+  .file .ico { width: 48px; height: 48px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center;
+               font-size: .7rem; font-weight: 700; color: var(--muted); overflow: hidden; flex: none; }
+  .file .ico img { width: 100%; height: 100%; object-fit: cover; }
+  .file .info { min-width: 0; flex: 1; }
+  .file .name { overflow-wrap: anywhere; font-weight: 600; }
+  .file .size { color: var(--muted); font-size: .85rem; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .row button, .row a.btn { padding: 6px 12px; min-height: 34px; font-size: .88rem; }
+  a.btn { text-decoration: none; color: var(--text); border: 1px solid var(--line); border-radius: 10px; display: inline-flex; align-items: center; background: var(--card); }
+  a.btn:hover { border-color: var(--accent); }
+  .item a { color: var(--accent); }
+  #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px); opacity: 0;
+           background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: .9rem; transition: .2s; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateX(-50%); }
+  @media (max-width: 520px) { .connect { grid-template-columns: 1fr; justify-items: center; text-align: center; } .linkrow { justify-content: center; } .nets { justify-content: center; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Phone ⇄ PC Bridge</h1>
+    <div class="status" role="status"><button class="ghost" id="toggleConnect" style="min-height:32px;padding:4px 8px">Show link</button><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+  </header>
+
+  <section class="card" id="connectCard" aria-labelledby="connectTitle">
+    <div class="connect">
+      <div class="qr" id="qr" aria-label="QR code with the local Wi-Fi link"></div>
+      <div>
+        <h2 id="connectTitle">Connect your other device</h2>
+        <p>On the same Wi-Fi, scan the QR code or type this address into the phone's browser.</p>
+        <div class="linkrow">
+          <span class="link" id="link">Detecting Wi-Fi address…</span>
+          <button id="copyLink">Copy link</button>
+        </div>
+        <div class="nets" id="nets"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" aria-label="Send">
+    <textarea id="text" placeholder="Type or paste text to send to the other device…" aria-label="Text to send"></textarea>
+    <div class="actions">
+      <button class="primary" id="sendText">Send text</button>
+      <button id="pick">Choose files…</button>
+      <input type="file" id="file" multiple hidden>
+      <span class="spacer"></span>
+      <span style="color:var(--muted);font-size:.8rem;align-self:center" id="hint">Ctrl/⌘ + Enter to send</span>
+    </div>
+    <div class="drop" id="drop">Drop files here, or paste an image / file anywhere on this page</div>
+    <div id="uploads"></div>
+  </section>
+
+  <div class="feedhead">
+    <h2>Shared items</h2>
+    <button class="ghost" id="clear">Clear all</button>
+  </div>
+  <div id="feed" aria-live="polite"></div>
+</main>
+<div id="toast"></div>
+
+<script src="/qrcode.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const me = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? "phone" : "pc";
+  const label = { phone: "📱 Phone", pc: "💻 PC", other: "Device" };
+  let items = [];
+  let linkIdx = 0, links = [], connectedOnce = false;
+
+  // ---------- helpers ----------
+  const toast = (() => { let t; return (m) => { const el = $("toast"); el.textContent = m; el.classList.add("show"); clearTimeout(t); t = setTimeout(() => el.classList.remove("show"), 1800); }; })();
+  const fmtSize = (n) => { const u = ["B","KB","MB","GB"]; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return (i ? n.toFixed(1) : n) + " " + u[i]; };
+  const fmtTime = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  async function copy(str) {
+    try { await navigator.clipboard.writeText(str); }
+    catch { // plain-http pages on a phone have no Clipboard API; fall back to execCommand
+      const ta = document.createElement("textarea"); ta.value = str; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, str.length);
+      let ok = false; try { ok = document.execCommand("copy"); } catch {} ta.remove();
+      if (!ok) return toast("Couldn't copy — select the text manually");
+    }
+    toast("Copied");
+  }
+  const api = (url, opts) => fetch(url, opts).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); });
+
+  // ---------- connect card ----------
+  function renderLink() {
+    const l = links[linkIdx];
+    if (!l) { $("link").textContent = "No Wi-Fi address found — connect this PC to your network"; $("qr").innerHTML = ""; return; }
+    $("link").textContent = l.url;
+    const q = qrcode(0, "M"); q.addData(l.url); q.make();
+    $("qr").innerHTML = q.createSvgTag({ cellSize: 4, margin: 3, scalable: true });
+    $("nets").innerHTML = "";
+    if (links.length > 1) links.forEach((x, i) => {
+      const b = document.createElement("button"); b.textContent = x.ip + " · " + x.iface; b.setAttribute("aria-pressed", i === linkIdx);
+      b.onclick = () => { linkIdx = i; renderLink(); }; $("nets").appendChild(b);
+    });
+  }
+  api("/api/info").then((info) => { links = info.links; renderLink(); }).catch(() => { $("link").textContent = location.href; });
+  $("toggleConnect").onclick = () => $("connectCard").classList.toggle("hide");
+  $("copyLink").onclick = () => copy(links[linkIdx] ? links[linkIdx].url : location.href);
+
+  // ---------- feed ----------
+  function linkify(parent, text) {
+    const re = /\bhttps?:\/\/[^\s<>"']+/g; let last = 0, m;
+    while ((m = re.exec(text))) {
+      parent.append(text.slice(last, m.index));
+      const a = document.createElement("a"); a.href = m[0]; a.textContent = m[0]; a.target = "_blank"; a.rel = "noopener noreferrer"; parent.append(a);
+      last = m.index + m[0].length;
+    }
+    parent.append(text.slice(last));
+  }
+  function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+
+  function renderItem(it) {
+    const card = el("div", "card item"); card.dataset.id = it.id;
+    const meta = el("div", "meta");
+    meta.append(el("span", "badge " + it.from, label[it.from] || label.other), el("span", "", fmtTime(it.time)), el("span", "spacer"));
+    const del = el("button", "ghost", "✕"); del.title = "Remove"; del.setAttribute("aria-label", "Remove item");
+    del.onclick = () => api("/api/items/" + it.id, { method: "DELETE" }).catch(() => toast("Couldn't remove"));
+    meta.append(del); card.append(meta);
+
+    if (it.kind === "text") {
+      const t = el("div", "text"); linkify(t, it.text); card.append(t);
+      const row = el("div", "row"); const c = el("button", "", "Copy"); c.onclick = () => copy(it.text); row.append(c); card.append(row);
+    } else {
+      const f = el("div", "file"); const ico = el("div", "ico");
+      if (/^image\//.test(it.mime)) { const img = el("img"); img.loading = "lazy"; img.alt = ""; img.src = "/files/" + it.id + "?inline"; ico.append(img); }
+      else ico.textContent = (it.name.split(".").pop() || "file").slice(0, 4).toUpperCase();
+      const info = el("div", "info"); info.append(el("div", "name", it.name), el("div", "size", fmtSize(it.size)));
+      f.append(ico, info); card.append(f);
+      const row = el("div", "row"); const a = el("a", "btn", "Download"); a.href = "/files/" + it.id; a.setAttribute("download", it.name); row.append(a);
+      if (/^(image|video|audio)\//.test(it.mime)) { const o = el("a", "btn", "Open"); o.href = "/files/" + it.id + "?inline"; o.target = "_blank"; o.rel = "noopener"; row.append(o); }
+      card.append(row);
+    }
+    return card;
+  }
+  function renderFeed() {
+    const feed = $("feed"); feed.innerHTML = "";
+    $("clear").classList.toggle("hide", !items.length);
+    if (!items.length) { feed.append(el("div", "empty", "Nothing shared yet. Send some text or a file from either device.")); return; }
+    [...items].reverse().forEach((it) => feed.append(renderItem(it)));
+  }
+
+  // ---------- live connection ----------
+  function connect() {
+    const es = new EventSource("/api/events");
+    es.onopen = () => { $("dot").classList.add("on"); api("/api/items").then((l) => { items = l; renderFeed(); }); };
+    es.onerror = () => { $("dot").classList.remove("on"); $("statusText").textContent = "Reconnecting…"; };
+    es.addEventListener("peers", (e) => {
+      const n = JSON.parse(e.data).count;
+      $("statusText").textContent = n > 1 ? n + " devices connected" : "Waiting for another device";
+      if (n > 1 && !connectedOnce) { connectedOnce = true; $("connectCard").classList.add("hide"); }
+    });
+    es.addEventListener("add", (e) => { const it = JSON.parse(e.data); if (!items.some((x) => x.id === it.id)) { items.push(it); renderFeed(); if (it.from !== me) toast("New item from " + (label[it.from] || "device")); } });
+    es.addEventListener("remove", (e) => { const { id } = JSON.parse(e.data); items = items.filter((x) => x.id !== id); renderFeed(); });
+    es.addEventListener("clear", () => { items = []; renderFeed(); });
+  }
+  connect();
+
+  // ---------- sending ----------
+  async function sendText() {
+    const v = $("text").value; if (!v.trim()) return $("text").focus();
+    try { await api("/api/text", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: v, from: me }) }); $("text").value = ""; }
+    catch { toast("Couldn't send"); }
+  }
+  $("sendText").onclick = sendText;
+  $("text").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendText(); } });
+  $("hint").classList.toggle("hide", me === "phone");
+
+  function upload(file) {
+    const row = el("div", "up"); const name = el("div", "", file.name + " — 0%"); const bar = el("div", "bar"); const fill = el("i"); bar.append(fill); row.append(name, bar);
+    $("uploads").append(row);
+    const x = new XMLHttpRequest();
+    x.open("POST", "/api/upload?from=" + me + "&name=" + encodeURIComponent(file.name));
+    x.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+    x.upload.onprogress = (e) => { if (e.lengthComputable) { const p = Math.round((e.loaded / e.total) * 100); fill.style.width = p + "%"; name.textContent = file.name + " — " + p + "%"; } };
+    x.onload = () => { row.remove(); if (x.status !== 200) toast("Upload failed: " + file.name); };
+    x.onerror = () => { row.remove(); toast("Upload failed: " + file.name); };
+    x.send(file);
+  }
+  const uploadAll = (files) => [...files].forEach(upload);
+  $("pick").onclick = () => $("file").click();
+  $("file").onchange = (e) => { uploadAll(e.target.files); e.target.value = ""; };
+
+  const drop = $("drop");
+  ["dragenter", "dragover"].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); if (t === "drop" || e.target === document.documentElement) drop.classList.remove("over"); }));
+  document.addEventListener("drop", (e) => { if (e.dataTransfer && e.dataTransfer.files.length) uploadAll(e.dataTransfer.files); });
+  document.addEventListener("paste", (e) => { const fs = e.clipboardData && e.clipboardData.files; if (fs && fs.length) { e.preventDefault(); uploadAll(fs); } });
+
+  $("clear").onclick = () => { if (confirm("Remove everything that was shared?")) api("/api/items", { method: "DELETE" }).catch(() => toast("Couldn't clear")); };
+})();
+</script>
+</body>
+</html>
